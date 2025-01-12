@@ -1,0 +1,6 @@
+__pycache__/
+reports/__pycache__/
+
+# Environments
+venv/
+.env
