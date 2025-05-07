@@ -13,24 +13,27 @@ from reports.advancedncd import (
     COPD,
     Asthma,
     Hypertension,
+    Sicklecell
 )
 
+load_dotenv()
+server = ""
 sql_hostname = os.environ["sql_hostname"]
 sql_username = os.environ["sql_username"]
 sql_password = os.environ["sql_password"]
 sql_main_database = os.environ["sql_main_database"]
 sql_port = os.environ["sql_port"]
-ssh_host = os.environ["ssh_host"]
+ssh_host = "10.160.22.15"
 ssh_user = os.environ["ssh_user"]
 ssh_password = os.environ["ssh_password"]
 ssh_port = os.environ["ssh_port"]
 sql_ip = os.environ["sql_ip"]
 try:
     with sshtunnel.SSHTunnelForwarder(
-        (ssh_host, ssh_port),
+        (ssh_host, 22),
         ssh_username=ssh_user,
         ssh_password=ssh_password,
-        remote_bind_address=(sql_ip, sql_port),
+        remote_bind_address=(sql_ip, 3306),
     ) as tunnel:
         try:
             conn = pymysql.connect(
@@ -50,7 +53,8 @@ try:
             advancedcopd = COPD(cursor_obj)
             advancedasthma = Asthma(cursor_obj)
             advancedhypertension = Hypertension(cursor_obj)
-            if ssh_host == "10.100.11.43":
+            advancedsicklecell = Sicklecell(cursor_obj)
+            if ssh_host == "10.160.22.19":
                 server = "Upper Neno"
             elif ssh_host == "10.160.22.15":
                 server = "Lower Neno"
@@ -235,6 +239,22 @@ try:
             advancedhypertension.currently_enrolled_patients_that_have_ever_experienced_complication()
             print("===============================")
             advancedhypertension.patients_with_visit_in_last_3_months_BPbelow_140over90()
+
+            print()
+            print("***************", "Pulling Sicklecell Data", "***************")
+            print()
+            print("===============================")
+            advancedsicklecell.enrolled_and_active_in_care()
+            print("===============================")
+            advancedsicklecell.newly_registered()
+            print("===============================")
+            advancedsicklecell.defaulted()
+            print("===============================")
+            advancedsicklecell.died()
+            print("===============================")
+            advancedsicklecell.patients_with_visit_in_the_last_month()
+            print("===============================")
+            advancedsicklecell.patients_with_a_visit_in_the_last_with_hospitalization_in_last_month()
 
             cursor_obj.close()
             conn.close()

@@ -4,7 +4,7 @@ from constants import dates, start
 import openpyxl
 import string
 
-path = r"C:\Users\LENOVO\Downloads\mysql-query-automation\apzu-advanced-ncd-report\reports\data.xlsx"
+path = r"C:\Users\LENOVO\Pictures\apzu-advanced-ncd-report\reports\data.xlsx"
 
 wb = openpyxl.load_workbook(path)
 
@@ -107,28 +107,26 @@ class CHF:
         # end_date = '"2024-12-31"'
         query = """
         /*patients enrolled in active care*/
-        use openmrs_warehouse;
+        ---
+        USE openmrs_warehouse;
         ---
         SET @endDate = {};
         ---
-
         call create_chronic_care_outcome(@endDate);
         ---
-        SET @defaultCutOff = 60;
-        ---
-        select 
-
-        lfo.location, gender, count(lfo.pat)
-
-        from chronic_care_last_facility_outcome  lfo
-        join mw_chf_initial chf
-        on lfo.pat = chf.patient_id
-        join mw_patient mp on mp.patient_id=chf.patient_id
-        where state IN ("In advanced care")
-        and pat in (
-        SELECT patient_id FROM omrs_obs where encounter_type IN ("CHF_FOLLOWUP")   
-        and concept = "Appointment date" and floor(datediff(@endDate,value_date)) <=  @defaultCutOff)
-        group by location, gender;
+        SELECT 
+            lfo.location, gender, COUNT(lfo.pat)
+        FROM
+            chronic_care_last_facility_outcome lfo
+                JOIN
+            mw_patient mp ON mp.patient_id = lfo.pat
+        WHERE
+            lfo.state = 'in advanced care'
+                AND pat IN (SELECT 
+                    patient_id
+                FROM
+                    mw_chf_initial)
+        GROUP BY location , gender;
         """
         for end_date in dates:
             if count_placeholders(query) == 2:
@@ -1208,63 +1206,26 @@ class DiabetesType2:
         /* Active in Care (Type 2) */
         USE openmrs_warehouse;
         ---
-        SET @defaultCutOff = 60;
-        ---
         SET @endDate = {};
         ---
-        select location, gender, count(*) as ncd_count
-        from
-        (
-        select distinct(mwp.patient_id), opi.identifier, mwp.first_name, mwp.last_name, ops.program, ops.state,ops.start_date,program_state_id,  mwp.gender,
-        ops.location, patient_visit.last_appt_date
-        from  mw_patient mwp  
-        join omrs_patient_identifier opi
-        on mwp.patient_id = opi.patient_id
-        join (
-        select patient_id,MAX(visit_date) as visit_date ,MAX(next_appointment_date) as last_appt_date from mw_ncd_visits where visit_date <= @endDate
-        group by patient_id
-            ) patient_visit
-            on patient_visit.patient_id = mwp.patient_id
-        JOIN
-        (SELECT
-        index_desc,
-            opi.patient_id as pat,
-            opi.identifier,
-            index_descending.state,
-            index_descending.location,
-            index_descending.program,
-        start_date,
-            program_state_id,
-            end_date
-        FROM (SELECT
-            @r:= IF(@u = patient_id, @r + 1,1) index_desc,
-            location,
-            state,
-            program,
-            start_date,
-            end_date,
-            patient_id,
-            program_state_id,
-            @u:= patient_id
-        FROM omrs_program_state,
-                    (SELECT @r:= 1) AS r,
-                    (SELECT @u:= 0) AS u
-                    where program IN ("Chronic Care Program")
-        and start_date <= @endDate
-            ORDER BY patient_id DESC, start_date DESC, program_state_id DESC
-            ) index_descending
-            join omrs_patient_identifier opi on index_descending.patient_id = opi.patient_id
-            and opi.location = index_descending.location
-            and opi.type = "Chronic Care Number"
-            where index_desc = 1)
-            ops
-            on opi.patient_id = ops.pat and opi.location = ops.location
-            where opi.type = "Chronic Care Number"
-            and state IN ("On Treatment","In advanced Care")
-            ) x
-            where patient_id IN (select patient_id from mw_diabetes_hypertension_followup where floor(datediff(@endDate,next_appointment_date)) <=  @defaultCutOff)
-            and patient_id in (select patient_id from mw_diabetes_hypertension_initial where (diagnosis_type_2_diabetes is not null))
-            group by location, gender;
+        call create_chronic_care_outcome(@endDate);
+        ---
+
+        SELECT 
+            lfo.location, gender, COUNT(lfo.pat)
+        FROM
+            chronic_care_last_facility_outcome lfo
+                JOIN
+            mw_patient mp ON mp.patient_id = lfo.pat
+        WHERE
+            lfo.state = 'in advanced care'
+                AND pat IN (SELECT 
+                    patient_id
+                FROM
+                    mw_diabetes_hypertension_initial
+                WHERE
+                    diagnosis_type_2_diabetes IS NOT NULL)
+        GROUP BY location , gender;
         """
         for end_date in dates:
             if count_placeholders(query) == 2:
@@ -1789,63 +1750,26 @@ class DiabetesType1:
         /* Active in Care (Type 1)*/
         USE openmrs_warehouse;
         ---
-        SET @defaultCutOff = 60;
-        ---
         SET @endDate = {};
         ---
-        select location, gender, count(*) as ncd_count
-        from
-        (
-        select distinct(mwp.patient_id), opi.identifier, mwp.first_name, mwp.last_name, ops.program, ops.state,ops.start_date,program_state_id,  mwp.gender,
-        ops.location, patient_visit.last_appt_date
-        from  mw_patient mwp  
-        join omrs_patient_identifier opi
-        on mwp.patient_id = opi.patient_id
-        join (
-        select patient_id,MAX(visit_date) as visit_date ,MAX(next_appointment_date) as last_appt_date from mw_ncd_visits where visit_date <= @endDate
-        group by patient_id
-            ) patient_visit
-            on patient_visit.patient_id = mwp.patient_id
-        JOIN
-        (SELECT
-        index_desc,
-            opi.patient_id as pat,
-            opi.identifier,
-            index_descending.state,
-            index_descending.location,
-            index_descending.program,
-        start_date,
-            program_state_id,
-            end_date
-        FROM (SELECT
-            @r:= IF(@u = patient_id, @r + 1,1) index_desc,
-            location,
-            state,
-            program,
-            start_date,
-            end_date,
-            patient_id,
-            program_state_id,
-            @u:= patient_id
-        FROM omrs_program_state,
-                    (SELECT @r:= 1) AS r,
-                    (SELECT @u:= 0) AS u
-                    where program IN ("Chronic Care Program")
-        and start_date <= @endDate
-            ORDER BY patient_id DESC, start_date DESC, program_state_id DESC
-            ) index_descending
-            join omrs_patient_identifier opi on index_descending.patient_id = opi.patient_id
-            and opi.location = index_descending.location
-            and opi.type = "Chronic Care Number"
-            where index_desc = 1)
-            ops
-            on opi.patient_id = ops.pat and opi.location = ops.location
-            where opi.type = "Chronic Care Number"
-            and state IN ("In advanced Care")
-            ) x
-            where patient_id IN (select patient_id from mw_diabetes_hypertension_followup where floor(datediff(@endDate,next_appointment_date)) <=  @defaultCutOff)
-            and patient_id in (select patient_id from mw_diabetes_hypertension_initial where (diagnosis_type_1_diabetes is not null))
-            group by location, gender;
+        call create_chronic_care_outcome(@endDate);
+        ---
+
+        SELECT 
+            lfo.location, gender, COUNT(lfo.pat)
+        FROM
+            chronic_care_last_facility_outcome lfo
+                JOIN
+            mw_patient mp ON mp.patient_id = lfo.pat
+        WHERE
+            lfo.state = 'in advanced care'
+                AND pat IN (SELECT 
+                    patient_id
+                FROM
+                    mw_diabetes_hypertension_initial
+                WHERE
+                    diagnosis_type_1_diabetes IS NOT NULL)
+        GROUP BY location , gender;
         """
         for end_date in dates:
             if count_placeholders(query) == 2:
@@ -2191,27 +2115,26 @@ class CKD:
     def enrolled_and_active_in_care(self):
         query = """
         /*patients enrolled in active care*/
-        use openmrs_warehouse;
+        USE openmrs_warehouse;
         ---
         SET @endDate = {};
         ---
         call create_chronic_care_outcome(@endDate);
         ---
-        SET @defaultCutOff = 60;
-        ---
-        select 
 
-        ckd.location, gender, count(lfo.pat)
-
-        from chronic_care_last_facility_outcome  lfo
-        join mw_ckd_initial ckd
-        on lfo.pat = ckd.patient_id
-        join mw_patient mp on mp.patient_id=ckd.patient_id
-        where state IN ("In advanced care")
-        and pat in (
-        SELECT patient_id FROM omrs_obs where encounter_type IN ("CKD_FOLLOWUP")   
-        and concept = "Appointment date" and floor(datediff(@endDate,value_date)) <=  @defaultCutOff)
-        group by ckd.location, gender;
+        SELECT 
+            lfo.location, gender, COUNT(lfo.pat)
+        FROM
+            chronic_care_last_facility_outcome lfo
+                JOIN
+            mw_patient mp ON mp.patient_id = lfo.pat
+        WHERE
+            lfo.state = 'in advanced care'
+                AND pat IN (SELECT 
+                    patient_id
+                FROM
+                mw_ckd_initial)
+        GROUP BY location , gender;
         """
         for end_date in dates:
             if count_placeholders(query) == 2:
@@ -3160,64 +3083,26 @@ class COPD:
         /* Patients enrolled and active in care1*/
         USE openmrs_warehouse;
         ---
-        SET @defaultCutOff = 60;
-        ---
-        SET @startDate = {};
-        ---
         SET @endDate = {};
         ---
-        select location,gender, count(distinct(patient_id)) as ncd_count
-        from
-        (
-        select distinct(mwp.patient_id), opi.identifier, mwp.first_name, mwp.last_name, ops.program, ops.state,ops.start_date,program_state_id,  mwp.gender,
-        ops.location, patient_visit.last_appt_date
-        from  mw_patient mwp  
-        join omrs_patient_identifier opi
-        on mwp.patient_id = opi.patient_id
-        join (
-        SELECT patient_id, MAX(value_date) as last_appt_date FROM omrs_obs where encounter_type = "ASTHMA_FOLLOWUP" and concept = "Appointment date" and obs_date <= @endDate
-        group by patient_id
-        ) patient_visit on patient_visit.patient_id = mwp.patient_id
-        JOIN
-        (SELECT
-        index_desc,
-        opi.patient_id as pat,
-        opi.identifier,
-        index_descending.state,
-        index_descending.location,
-        index_descending.program,
-        start_date,
-        program_state_id,
-        end_date
-        FROM (SELECT
-        @r:= IF(@u = patient_id, @r + 1,1) index_desc,
-        location,
-        state,
-        program,
-        start_date,
-        end_date,
-        patient_id,
-        program_state_id,
-        @u:= patient_id
-        FROM omrs_program_state,
-        (SELECT @r:= 1) AS r,
-        (SELECT @u:= 0) AS u
-        where program IN ("Chronic Care Program")
-        and start_date <= @endDate
-        ORDER BY patient_id DESC, start_date DESC, program_state_id DESC
-        ) index_descending
-        join omrs_patient_identifier opi on index_descending.patient_id = opi.patient_id
-        and opi.location = index_descending.location
-        and opi.type = "Chronic Care Number"
-        where index_desc = 1)
-        ops
-        on opi.patient_id = ops.pat and opi.location = ops.location
-        where opi.type = "Chronic Care Number"
-        and state IN ("In advanced Care")
-        ) x
-        where patient_id IN (SELECT patient_id FROM omrs_obs where encounter_type = "ASTHMA_FOLLOWUP" and concept = "Appointment date" and floor(datediff(@endDate,value_date)) <=  @defaultCutOff)
-        and patient_id in (select patient_id from mw_asthma_initial where diagnosis_copd is not null)
-        group by location, gender;
+        call create_chronic_care_outcome(@endDate);
+        ---
+
+        SELECT 
+            lfo.location, gender, COUNT(lfo.pat)
+        FROM
+            chronic_care_last_facility_outcome lfo
+                JOIN
+            mw_patient mp ON mp.patient_id = lfo.pat
+        WHERE
+            lfo.state = 'in advanced care'
+                AND pat IN (SELECT 
+                    patient_id
+                FROM
+                    mw_asthma_initial
+                WHERE
+                    diagnosis_copd IS NOT NULL)
+        GROUP BY location , gender;
         """
         for end_date in dates:
             if count_placeholders(query) == 2:
@@ -3494,67 +3379,30 @@ class Asthma:
 
     def enrolled_and_active_in_care(self):
         query = """
+        /* Active in Care */
         /* Patients enrolled and active in care1*/
         USE openmrs_warehouse;
         ---
-        SET @defaultCutOff = 60;
-        ---
-        SET @startDate = {};
-        ---
         SET @endDate = {};
         ---
-        select x.location, gender,count(distinct(patient_id)) as ncd_count
-        from
-        (
-        select distinct(mwp.patient_id), opi.identifier, mwp.first_name, mwp.last_name, ops.program, ops.state,ops.start_date,program_state_id,  mwp.gender,
-        ops.location, patient_visit.last_appt_date
-        from  mw_patient mwp  
-        join omrs_patient_identifier opi
-        on mwp.patient_id = opi.patient_id
-        join (
-        SELECT patient_id, MAX(value_date) as last_appt_date FROM omrs_obs where encounter_type = "ASTHMA_FOLLOWUP" and concept = "Appointment date" and obs_date <= @endDate
-        group by patient_id
-        ) patient_visit on patient_visit.patient_id = mwp.patient_id
-        JOIN
-        (SELECT
-        index_desc,
-        opi.patient_id as pat,
-        opi.identifier,
-        index_descending.state,
-        index_descending.location,
-        index_descending.program,
-        start_date,
-        program_state_id,
-        end_date
-        FROM (SELECT
-        @r:= IF(@u = patient_id, @r + 1,1) index_desc,
-        location,
-        state,
-        program,
-        start_date,
-        end_date,
-        patient_id,
-        program_state_id,
-        @u:= patient_id
-        FROM omrs_program_state,
-        (SELECT @r:= 1) AS r,
-        (SELECT @u:= 0) AS u
-        where program IN ("Chronic Care Program")
-        and start_date <= @endDate
-        ORDER BY patient_id DESC, start_date DESC, program_state_id DESC
-        ) index_descending
-        join omrs_patient_identifier opi on index_descending.patient_id = opi.patient_id
-        and opi.location = index_descending.location
-        and opi.type = "Chronic Care Number"
-        where index_desc = 1)
-        ops
-        on opi.patient_id = ops.pat and opi.location = ops.location
-        where opi.type = "Chronic Care Number"
-        and state IN ("In advanced Care")
-        ) x
-        where patient_id IN (SELECT patient_id FROM omrs_obs where encounter_type = "ASTHMA_FOLLOWUP" and concept = "Appointment date" and floor(datediff(@endDate,value_date)) <=  @defaultCutOff)
-        and patient_id in (select patient_id from mw_asthma_initial where diagnosis_asthma is not null)
-        group by  x.location, gender;
+        call create_chronic_care_outcome(@endDate);
+        ---
+
+        SELECT 
+            lfo.location, gender, COUNT(lfo.pat)
+        FROM
+            chronic_care_last_facility_outcome lfo
+                JOIN
+            mw_patient mp ON mp.patient_id = lfo.pat
+        WHERE
+            lfo.state = 'in advanced care'
+                AND pat IN (SELECT 
+                    patient_id
+                FROM
+                    mw_asthma_initial
+                WHERE
+                    diagnosis_asthma IS NOT NULL)
+        GROUP BY location , gender;
         """
         for end_date in dates:
             if count_placeholders(query) == 2:
@@ -4118,33 +3966,27 @@ class Hypertension:
     def enrolled_and_active_in_care(self):
         query = """
         /*patients enrolled in active care*/
-        use openmrs_warehouse;
+        USE openmrs_warehouse;
         ---
         SET @endDate = {};
         ---
-        
         call create_chronic_care_outcome(@endDate);
         ---
-        SET @defaultCutOff = 60;
-        ---
+
         SELECT 
             lfo.location, gender, COUNT(lfo.pat)
         FROM
             chronic_care_last_facility_outcome lfo
                 JOIN
-            mw_diabetes_hypertension_initial mdhi ON lfo.pat = mdhi.patient_id
-                JOIN
-            mw_patient mp ON mp.patient_id = mdhi.patient_id
+            mw_patient mp ON mp.patient_id = lfo.pat
         WHERE
-            state IN ('In advanced care')
+            lfo.state = 'in advanced care'
                 AND pat IN (SELECT 
                     patient_id
                 FROM
-                    omrs_obs
+                    mw_diabetes_hypertension_initial
                 WHERE
-                    encounter_type IN ('DIABETES HYPERTENSION FOLLOWUP')
-                        AND concept = 'Appointment date'
-                        AND FLOOR(DATEDIFF(@endDate, value_date)) <= @defaultCutOff)
+                    diagnosis_hypertension IS NOT NULL)
         GROUP BY location , gender;
         """
         for end_date in dates:
@@ -4647,3 +4489,298 @@ class Hypertension:
             response = self.cursor_obj.fetchall()
         print("patients_with_visit_in_last_3_months_BPbelow_140over90:", response)
         write_data(99, response)
+
+class Sicklecell:
+    def __init__(self, cursor_obj):
+        self.cursor_obj = cursor_obj
+        write_header(
+            101,
+            102,
+            "Dambe Clinic",
+            "Sicklecell",
+                        [
+                "Enrolled and active in care",
+                "Newly registered in reporting period",
+                "Patients who have defaulted during the reporting period",
+                "Patients who died during the reporting period",
+                "Patients with a visit in the last month",
+                "Patients with a visit in the last month on hydoxyurea",
+                "Patients with a visit in the last with hospitalization in last month",
+            ],
+        )
+        write_header(
+            101,
+            102,
+            "Neno District Hospital",
+            "Sicklecell",
+            [
+                "Enrolled and active in care",
+                "Newly registered in reporting period",
+                "Patients who have defaulted during the reporting period",
+                "Patients who died during the reporting period",
+                "Patients with a visit in the last month",
+                "Patients with a visit in the last month on hydoxyurea",
+                "Patients with a visit in the last with hospitalization in last month",
+            ],
+        )
+
+    def enrolled_and_active_in_care(self):
+        query = """
+        /*patients enrolled in active care*/
+        use openmrs_warehouse;
+        ---
+        SET @endDate = {};
+        ---
+
+        call create_chronic_care_outcome(@endDate);
+        ---
+        SET @defaultCutOff = 60;
+        ---
+        select 
+
+        lfo.location, gender, count(distinct(pat)) as ncd_count
+
+
+        from chronic_care_last_facility_outcome lfo
+        left join mw_ncd_other_initial ncdoi
+        on pat = ncdoi.patient_id
+        join mw_patient mp on mp.patient_id=ncdoi.patient_id
+        where state IN ("In advanced care")
+        and pat in (
+        SELECT patient_id FROM omrs_obs where encounter_type IN ("NCD_OTHER_FOLLOWUP")   
+        and concept = "Appointment date" and floor(datediff(@endDate,value_date)) <=  @defaultCutOff)
+        and diagnosis_sickle_cell_disease ='Sickle cell disease'
+        group by location, gender;
+        """
+        for end_date in dates:
+            if count_placeholders(query) == 2:
+                index = dates.index(end_date)
+                start_date = start[index]
+                formatted_qry = query.format(start_date, end_date)
+            else:
+                formatted_qry = query.format(end_date)
+            qry_lst = formatted_qry.split("---")
+            for qry in qry_lst:
+                self.cursor_obj.execute(qry)
+            response = self.cursor_obj.fetchall()
+        print("enrolled_and_active_in_care:", response)
+        write_data(103, response)
+
+    def newly_registered(self):
+        query = """
+        /*Patients newly registered in reporting period*/
+        use openmrs_warehouse;
+        ---
+        SET @startDate = {};
+        ---
+        SET @endDate = {};
+        ---
+        select 
+        ncdoi.location, 
+        gender, count(distinct(ncdoi.patient_id)) as ncd_count
+
+        from mw_ncd_diagnoses mnd
+        left join mw_ncd_other_initial ncdoi
+        on mnd.patient_id = ncdoi.patient_id
+        join mw_patient mp on mp.patient_id=ncdoi.patient_id
+        where encounter_type IN  ('NCD_OTHER_INITIAL') 
+        and diagnosis_sickle_cell_disease ='Sickle cell disease'
+        and diagnosis_date between @startDate and @endDate
+        group by location, gender;
+        """
+        for end_date in dates:
+            if count_placeholders(query) == 2:
+                index = dates.index(end_date)
+                start_date = start[index]
+                formatted_qry = query.format(start_date, end_date)
+            else:
+                formatted_qry = query.format(end_date)
+            qry_lst = formatted_qry.split("---")
+            for qry in qry_lst:
+                self.cursor_obj.execute(qry)
+            response = self.cursor_obj.fetchall()
+        print("newly_registered:", response)
+        write_data(104, response)
+
+    def defaulted(self):
+        query = """
+        /* Patients who have defaulted during the reporting period*/
+        use openmrs_warehouse;
+        ---
+        SET @startDate = {};
+        ---
+        SET @endDate = {};
+        ---
+        call create_chronic_care_outcome(@endDate);
+        ---
+        SET @defaultCutOff = 60;
+        ---
+        select 
+        cclfo.location, gender, count(distinct(pat)) as ncd_count
+
+        from chronic_care_last_facility_outcome cclfo
+
+        left join mw_ncd_other_initial ncdoi
+        on pat = ncdoi.patient_id
+        join mw_patient mp on mp.patient_id=ncdoi.patient_id
+        where ((state IN ("Patient defaulted")
+        and cclfo.start_date between @startDate and @endDate ) 
+        )
+        and diagnosis_sickle_cell_disease ='Sickle cell disease'
+        group by location, gender;
+        """
+        for end_date in dates:
+            if count_placeholders(query) == 2:
+                index = dates.index(end_date)
+                start_date = start[index]
+                formatted_qry = query.format(start_date, end_date)
+            else:
+                formatted_qry = query.format(end_date)
+            qry_lst = formatted_qry.split("---")
+            for qry in qry_lst:
+                self.cursor_obj.execute(qry)
+            response = self.cursor_obj.fetchall()
+        print("defaulted:", response)
+        write_data(105, response)
+
+    def died(self):
+        query = """
+        /* patients who have died during the reporting period */
+        use openmrs_warehouse;
+        ---
+        SET @startDate = {};
+        ---
+        SET @endDate = {};
+        ---
+        call create_chronic_care_outcome(@endDate);
+        ---
+        SET @defaultCutOff = 60;
+        ---
+        select 
+        cclfo.location, 
+        gender, count(distinct(pat)) as ncd_count
+
+        from chronic_care_last_facility_outcome cclfo
+
+        left join mw_ncd_other_initial ncdoi
+        on pat = ncdoi.patient_id
+        join mw_patient mp on mp.patient_id=ncdoi.patient_id
+        where ((state IN ("Patient died")
+        and cclfo.start_date between @startDate and @endDate ) 
+        )
+        and diagnosis_sickle_cell_disease ='Sickle cell disease'
+        group by location, gender;
+        """
+        for end_date in dates:
+            if count_placeholders(query) == 2:
+                index = dates.index(end_date)
+                start_date = start[index]
+                formatted_qry = query.format(start_date, end_date)
+            else:
+                formatted_qry = query.format(end_date)
+            qry_lst = formatted_qry.split("---")
+            for qry in qry_lst:
+                self.cursor_obj.execute(qry)
+            response = self.cursor_obj.fetchall()
+        print("died:", response)
+        write_data(106, response)
+
+    def patients_with_visit_in_the_last_month(self):
+        query = """
+        /*  Patients with a visit in last month */
+        use openmrs_warehouse;
+        ---
+        SET @startDate = {};
+        ---
+        SET @endDate = {};
+        ---
+        call create_chronic_care_outcome(@endDate);
+        ---
+        SET @defaultCutOff = 60;
+        ---
+        select 
+        lfo.location, gender, count(distinct(pat)) as ncd_count
+        from chronic_care_last_facility_outcome lfo
+        left join mw_ncd_other_initial ncdoi
+        on pat = ncdoi.patient_id
+        join mw_patient mp on mp.patient_id=lfo.pat
+        where pat in (
+        SELECT patient_id FROM omrs_obs where encounter_type IN ("NCD_OTHER_FOLLOWUP")   
+        and obs_date between @startDate and @endDate )
+        and diagnosis_sickle_cell_disease ='Sickle cell disease'
+        group by location, gender;
+        """
+        for end_date in dates:
+            if count_placeholders(query) == 2:
+                index = dates.index(end_date)
+                start_date = start[index]
+                formatted_qry = query.format(start_date, end_date)
+            else:
+                formatted_qry = query.format(end_date)
+            qry_lst = formatted_qry.split("---")
+            for qry in qry_lst:
+                self.cursor_obj.execute(qry)
+            response = self.cursor_obj.fetchall()
+        print("patients_with_visit_in_the_last_month:", response)
+        write_data(107, response)
+
+    # def patients_with_visit_in_the_last_month_on_hydoxyurea(self):
+    #     query = """
+
+    #     """
+    #     for end_date in dates:
+    #         if count_placeholders(query) == 2:
+    #             index = dates.index(end_date)
+    #             start_date = start[index]
+    #             formatted_qry = query.format(start_date, end_date)
+    #         else:
+    #             formatted_qry = query.format(end_date)
+    #         qry_lst = formatted_qry.split("---")
+    #         for qry in qry_lst:
+    #             self.cursor_obj.execute(qry)
+    #         response = self.cursor_obj.fetchall()
+    #     print(
+    #         "patients_with_visit_in_the_last_month_on_hydoxyurea:",
+    #         response,
+    #     )
+    #     write_data(108, response)
+
+    def patients_with_a_visit_in_the_last_with_hospitalization_in_last_month(self):
+        query = """
+        /* Patients with a visit in  last month with Hospitalization in last month */
+        use openmrs_warehouse;
+        ---
+        SET @startDate = {};
+        ---
+        SET @endDate = {};
+        ---
+        call create_chronic_care_outcome(@endDate);
+        ---
+        SET @defaultCutOff = 60;
+        ---
+        select 
+        lfo.location, gender, count(distinct(pat)) as ncd_count
+        from chronic_care_last_facility_outcome lfo
+        left join mw_ncd_other_initial ncdoi
+        on pat = ncdoi.patient_id
+        join mw_patient mp on mp.patient_id=lfo.pat
+        where pat in (
+        SELECT patient_id FROM omrs_obs where encounter_type IN ("NCD_OTHER_FOLLOWUP")   
+        and obs_date between @startDate and @endDate )
+        and diagnosis_sickle_cell_disease ='Sickle cell disease'
+        and pat in (select patient_id from mw_ncd_other_followup where  hospitalized_since_last_visit_for_ncd='yes')
+        group by location, gender;
+        """
+        for end_date in dates:
+            if count_placeholders(query) == 2:
+                index = dates.index(end_date)
+                start_date = start[index]
+                formatted_qry = query.format(start_date, end_date)
+            else:
+                formatted_qry = query.format(end_date)
+            qry_lst = formatted_qry.split("---")
+            for qry in qry_lst:
+                self.cursor_obj.execute(qry)
+            response = self.cursor_obj.fetchall()
+        print("patients_with_a_visit_in_the_last_with_hospitalization_in_last_month:", response)
+        write_data(109, response)
